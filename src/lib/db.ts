@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-const DB_PATH = path.join(process.cwd(), 'data.db');
+const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data.db');
 
 let db: Database.Database | null = null;
 
