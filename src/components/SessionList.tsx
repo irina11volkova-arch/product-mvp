@@ -2,16 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Session } from '@/lib/types';
+import { Session, PageMode } from '@/lib/types';
 
-export default function SessionList() {
+interface SessionListProps {
+  mode?: PageMode;
+}
+
+export default function SessionList({ mode }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
 
   useEffect(() => {
-    fetch('/api/sessions')
+    const url = mode ? `/api/sessions?mode=${mode}` : '/api/sessions';
+    fetch(url)
       .then((r) => r.json())
       .then(setSessions);
-  }, []);
+  }, [mode]);
 
   if (sessions.length === 0) return null;
 

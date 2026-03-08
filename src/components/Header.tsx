@@ -7,14 +7,16 @@ export default function Header() {
   const pathname = usePathname();
 
   const links = [
-    { href: '/', label: 'Звонки', match: (p: string) => p === '/' || p.startsWith('/session') },
+    { href: '/partnerka', label: 'Партнерка', match: (p: string) => p.startsWith('/partnerka') },
+    { href: '/sales', label: 'Отдел продаж', match: (p: string) => p.startsWith('/sales') },
+    { href: '/transcription', label: 'Транскрибация', match: (p: string) => p.startsWith('/transcription') },
     { href: '/employees', label: 'Сотрудники', match: (p: string) => p.startsWith('/employee') },
   ];
 
   return (
     <header className="border-b border-zinc-200 bg-white">
       <div className="max-w-3xl mx-auto px-6 h-12 flex items-center justify-between">
-        <Link href="/" className="text-sm font-semibold tracking-tight text-zinc-900">
+        <Link href="/partnerka" className="text-sm font-semibold tracking-tight text-zinc-900">
           Анализ звонков
         </Link>
         <nav className="flex items-center gap-1">

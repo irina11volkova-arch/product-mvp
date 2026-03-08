@@ -1,13 +1,16 @@
+export type PageMode = 'partnerka' | 'sales' | 'transcription';
+
 export interface Session {
   id: string;
   title: string;
   status: 'processing' | 'done' | 'error';
-  prompt_id: string;
+  prompt_id: string | null;
   transcript_json: string | null;
   feedback_json: string | null;
   error_message: string | null;
   manager_name: string | null;
   score: number | null;
+  mode: PageMode | null;
   created_at: string;
 }
 

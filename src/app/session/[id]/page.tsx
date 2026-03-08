@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import TranscriptView from '@/components/TranscriptView';
 import KeyTakeaways from '@/components/KeyTakeaways';
+import RawTranscriptView from '@/components/RawTranscriptView';
 import { Session, FeedbackResult } from '@/lib/types';
 import { scoreColor } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
@@ -50,7 +51,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <p className="text-zinc-500">Сессия не найдена</p>
-        <Link href="/" className="text-zinc-600 hover:text-zinc-900 text-sm transition-colors">
+        <Link href="/partnerka" className="text-zinc-600 hover:text-zinc-900 text-sm transition-colors">
           На главную
         </Link>
       </div>
@@ -60,6 +61,12 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const feedback: FeedbackResult | null = session.feedback_json
     ? JSON.parse(session.feedback_json)
     : null;
+
+  const rawSegments = session.transcript_json
+    ? JSON.parse(session.transcript_json)
+    : null;
+
+  const isTranscriptionOnly = session.mode === 'transcription';
 
   return (
     <main className="min-h-screen">
@@ -89,7 +96,9 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
         {session.status === 'processing' && (
           <div className="flex flex-col items-center py-16 gap-4">
             <div className="w-10 h-10 border-2 border-zinc-200 border-t-zinc-700 rounded-full animate-spin" />
-            <p className="text-zinc-600">Анализирую звонок...</p>
+            <p className="text-zinc-600">
+              {isTranscriptionOnly ? 'Транскрибирую...' : 'Анализирую звонок...'}
+            </p>
           </div>
         )}
 
@@ -101,7 +110,13 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
           </div>
         )}
 
-        {session.status === 'done' && feedback && (
+        {session.status === 'done' && isTranscriptionOnly && rawSegments && (
+          <div className="animate-fade-in">
+            <RawTranscriptView segments={rawSegments} />
+          </div>
+        )}
+
+        {session.status === 'done' && !isTranscriptionOnly && feedback && (
           <div className="animate-fade-in space-y-6">
             <KeyTakeaways feedback={feedback} />
             <TranscriptView feedback={feedback} />

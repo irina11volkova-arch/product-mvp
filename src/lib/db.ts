@@ -50,6 +50,9 @@ function migrate(db: Database.Database) {
   if (!columnNames.includes('score')) {
     db.exec('ALTER TABLE sessions ADD COLUMN score INTEGER');
   }
+  if (!columnNames.includes('mode')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN mode TEXT');
+  }
 }
 
 function seed(db: Database.Database) {

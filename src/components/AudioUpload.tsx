@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { PageMode } from '@/lib/types';
 
 interface AudioUploadProps {
   promptId: string | null;
+  mode: PageMode;
   onUploadStart: (sessionId: string) => void;
   disabled?: boolean;
 }
 
-export default function AudioUpload({ promptId, onUploadStart, disabled }: AudioUploadProps) {
+export default function AudioUpload({ promptId, mode, onUploadStart, disabled }: AudioUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,8 +18,8 @@ export default function AudioUpload({ promptId, onUploadStart, disabled }: Audio
 
   const handleUpload = useCallback(
     async (file: File) => {
-      if (!promptId) {
-        setError('Сначала выберите промт');
+      if (mode !== 'transcription' && !promptId) {
+        setError('Промпт ещё загружается...');
         return;
       }
       setError(null);
@@ -25,7 +27,10 @@ export default function AudioUpload({ promptId, onUploadStart, disabled }: Audio
       try {
         const formData = new FormData();
         formData.append('audio', file);
-        formData.append('prompt_id', promptId);
+        formData.append('mode', mode);
+        if (promptId) {
+          formData.append('prompt_id', promptId);
+        }
         const res = await fetch('/api/upload', { method: 'POST', body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
@@ -36,7 +41,7 @@ export default function AudioUpload({ promptId, onUploadStart, disabled }: Audio
         setIsUploading(false);
       }
     },
-    [promptId, onUploadStart]
+    [promptId, mode, onUploadStart]
   );
 
   const handleDrop = useCallback(
