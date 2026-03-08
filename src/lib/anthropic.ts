@@ -61,7 +61,7 @@ export async function generateFeedback(
   promptText: string
 ): Promise<FeedbackResult> {
   const transcript = segments
-    .map((s) => `[${s.start ?? 0}-${s.end ?? 0}] Спикер ${s.speaker + 1}: ${s.text}`)
+    .map((s) => `Спикер ${s.speaker + 1}: ${s.text}`)
     .join('\n');
 
   const response = await client.messages.create({
@@ -84,14 +84,12 @@ export async function generateFeedback(
       "speaker": "Спикер 1",
       "text": "текст фрагмента",
       "highlight": "green" или "red" или null,
-      "comment": "комментарий что хорошо/плохо и почему" или null,
-      "start": число (время начала в секундах, скопируй из таймкода реплики),
-      "end": число (время конца в секундах, скопируй из таймкода реплики)
+      "comment": "комментарий что хорошо/плохо и почему" или null
     }
   ]
 }
 
-Каждая реплика из транскрипции должна быть отдельным элементом в segments. Для реплик без замечаний highlight и comment = null. Обязательно сохрани таймкоды start и end из квадратных скобок перед каждой репликой.
+Каждая реплика из транскрипции должна быть отдельным элементом в segments. Для реплик без замечаний highlight и comment = null.
 
 Транскрипция:
 ${transcript}`,
@@ -105,7 +103,16 @@ ${transcript}`,
     throw new Error('Не удалось получить AI-фидбек');
   }
 
-  return JSON.parse(jsonMatch[0]);
+  const result = JSON.parse(jsonMatch[0]) as FeedbackResult;
+
+  // Restore timestamps from input segments by index (don't trust Claude with numbers)
+  result.segments = result.segments.map((seg, i) => ({
+    ...seg,
+    start: segments[i]?.start ?? 0,
+    end: segments[i]?.end ?? 0,
+  }));
+
+  return result;
 }
 
 export async function generateEmployeeReport(
