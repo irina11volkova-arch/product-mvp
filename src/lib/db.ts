@@ -12,6 +12,7 @@ export function getDb(): Database.Database {
     db.pragma('journal_mode = WAL');
     migrate(db);
     seed(db);
+    ensurePrompts(db);
   }
   return db;
 }
@@ -132,5 +133,38 @@ function seed(db: Database.Database) {
 
   for (const p of prompts) {
     insert.run(p.id, p.name, p.text);
+  }
+}
+
+function ensurePrompts(db: Database.Database) {
+  const needed = [
+    {
+      name: 'Настя — разбор с менеджером КЦ',
+      text: `Ты — опытный руководитель колл-центра. Проанализируй транскрипцию звонка менеджера колл-центра.
+
+Оцени:
+1. Установление контакта: как менеджер начал разговор, был ли раппорт
+2. Выявление потребностей: задавал ли правильные вопросы
+3. Презентация: насколько убедительно рассказал о продукте/услуге
+4. Отработка возражений: как реагировал на сомнения клиента
+5. Закрытие: предложил ли следующий шаг
+
+Подсвети зелёным фрагменты, где менеджер действовал профессионально.
+Подсвети красным фрагменты, где менеджер допустил ошибки или упустил возможность.
+Для каждого подсвеченного фрагмента напиши конкретный комментарий: что именно хорошо или плохо и почему.
+Отдельно напиши, был ли установлен контакт/раппорт между менеджером и клиентом.
+Дай общий статус результата звонка простым языком (без процентов и цифр).`,
+    },
+  ];
+
+  const insert = db.prepare(
+    "INSERT INTO prompts (id, name, text, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))"
+  );
+
+  for (const p of needed) {
+    const exists = db.prepare('SELECT 1 FROM prompts WHERE name = ?').get(p.name);
+    if (!exists) {
+      insert.run(uuidv4(), p.name, p.text);
+    }
   }
 }

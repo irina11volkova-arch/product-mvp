@@ -1,4 +1,4 @@
-export type PageMode = 'partnerka' | 'sales' | 'transcription';
+export type PageMode = 'partnerka' | 'sales' | 'transcription' | 'callcenter';
 
 export interface Session {
   id: string;

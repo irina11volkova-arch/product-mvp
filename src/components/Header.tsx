@@ -8,7 +8,8 @@ export default function Header() {
 
   const links = [
     { href: '/partnerka', label: 'Партнерка', match: (p: string) => p.startsWith('/partnerka') },
-    { href: '/sales', label: 'Отдел продаж', match: (p: string) => p.startsWith('/sales') },
+    { href: '/sales', label: 'ОП', match: (p: string) => p.startsWith('/sales') },
+    { href: '/callcenter', label: 'КЦ', match: (p: string) => p.startsWith('/callcenter') },
     { href: '/transcription', label: 'Транскрибация', match: (p: string) => p.startsWith('/transcription') },
     { href: '/employees', label: 'Сотрудники', match: (p: string) => p.startsWith('/employee') },
   ];
