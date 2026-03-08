@@ -12,7 +12,7 @@ interface TranscriptInput {
 
 export async function cleanTranscript(segments: TranscriptInput[]): Promise<TranscriptInput[]> {
   const rawText = segments
-    .map((s) => `Спикер ${s.speaker + 1}: ${s.text}`)
+    .map((s, i) => `[${i}] Спикер ${s.speaker + 1}: ${s.text}`)
     .join('\n');
 
   const response = await client.messages.create({
@@ -28,10 +28,12 @@ export async function cleanTranscript(segments: TranscriptInput[]): Promise<Tran
 - Сохрани смысл и разделение по спикерам
 - Текст должен читаться бегло и понятно
 
-Верни результат строго в JSON-формате — массив объектов:
-[{"speaker": 0, "text": "очищенный текст"}, ...]
+ВАЖНО: каждая реплика имеет номер [id]. Ты ОБЯЗАН вернуть этот id в ответе для каждой реплики. Не объединяй и не пропускай реплики.
 
-Нумерация спикеров начинается с 0. Не меняй порядок и не объединяй реплики.
+Верни результат строго в JSON-формате — массив объектов:
+[{"id": 0, "speaker": 0, "text": "очищенный текст"}, ...]
+
+Нумерация спикеров начинается с 0.
 
 Транскрипция:
 ${rawText}`,
@@ -44,13 +46,18 @@ ${rawText}`,
   if (!jsonMatch) return segments;
 
   try {
-    const cleaned = JSON.parse(jsonMatch[0]) as TranscriptInput[];
-    // Restore timestamps from original segments by index
-    return cleaned.map((c, i) => ({
-      ...c,
-      start: segments[i]?.start ?? 0,
-      end: segments[i]?.end ?? 0,
-    }));
+    const cleaned = JSON.parse(jsonMatch[0]) as (TranscriptInput & { id?: number })[];
+    // Restore timestamps using id to match original segments
+    return cleaned.map((c, i) => {
+      const originalIdx = c.id ?? i;
+      const original = segments[originalIdx];
+      return {
+        speaker: c.speaker,
+        text: c.text,
+        start: original?.start ?? 0,
+        end: original?.end ?? 0,
+      };
+    });
   } catch {
     return segments;
   }
@@ -61,7 +68,7 @@ export async function generateFeedback(
   promptText: string
 ): Promise<FeedbackResult> {
   const transcript = segments
-    .map((s) => `Спикер ${s.speaker + 1}: ${s.text}`)
+    .map((s, i) => `[${i}] Спикер ${s.speaker + 1}: ${s.text}`)
     .join('\n');
 
   const response = await client.messages.create({
@@ -81,6 +88,7 @@ export async function generateFeedback(
   "score": число от 1 до 10 — общая оценка качества звонка менеджера,
   "segments": [
     {
+      "id": 0,
       "speaker": "Спикер 1",
       "text": "текст фрагмента",
       "highlight": "green" или "red" или null,
@@ -89,7 +97,7 @@ export async function generateFeedback(
   ]
 }
 
-Каждая реплика из транскрипции должна быть отдельным элементом в segments. Для реплик без замечаний highlight и comment = null.
+ВАЖНО: каждая реплика в транскрипции имеет номер [id]. Ты ОБЯЗАН вернуть этот id в каждом элементе segments. Не пропускай реплики — каждая должна быть в ответе. Для реплик без замечаний highlight и comment = null.
 
 Транскрипция:
 ${transcript}`,
@@ -105,12 +113,17 @@ ${transcript}`,
 
   const result = JSON.parse(jsonMatch[0]) as FeedbackResult;
 
-  // Restore timestamps from input segments by index (don't trust Claude with numbers)
-  result.segments = result.segments.map((seg, i) => ({
-    ...seg,
-    start: segments[i]?.start ?? 0,
-    end: segments[i]?.end ?? 0,
-  }));
+  // Restore timestamps using id to match original segments
+  result.segments = result.segments.map((seg, i) => {
+    const segWithId = seg as typeof seg & { id?: number };
+    const originalIdx = segWithId.id ?? i;
+    const original = segments[originalIdx];
+    return {
+      ...seg,
+      start: original?.start ?? 0,
+      end: original?.end ?? 0,
+    };
+  });
 
   return result;
 }
