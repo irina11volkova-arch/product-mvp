@@ -37,16 +37,9 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     return () => clearInterval(interval);
   }, [id]);
 
-  // Poll current time from audio player for active segment highlighting
-  useEffect(() => {
-    if (!session?.audio_path) return;
-    const timer = setInterval(() => {
-      if (playerRef.current) {
-        setCurrentTime(playerRef.current.getCurrentTime());
-      }
-    }, 200);
-    return () => clearInterval(timer);
-  }, [session?.audio_path]);
+  const handleTimeUpdate = useCallback((time: number) => {
+    setCurrentTime(time);
+  }, []);
 
   const handleSegmentClick = useCallback((startTime: number) => {
     playerRef.current?.seekTo(startTime);
@@ -90,7 +83,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   return (
     <main className="min-h-screen">
       {hasAudio && session.status === 'done' && (
-        <AudioPlayer ref={playerRef} sessionId={id} />
+        <AudioPlayer ref={playerRef} sessionId={id} onTimeUpdate={handleTimeUpdate} />
       )}
 
       <div className="max-w-3xl mx-auto px-6 py-12">

@@ -9,9 +9,10 @@ export interface AudioPlayerRef {
 
 interface AudioPlayerProps {
   sessionId: string;
+  onTimeUpdate?: (time: number) => void;
 }
 
-const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ sessionId }, ref) => {
+const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ sessionId, onTimeUpdate }, ref) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -23,7 +24,6 @@ const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ sessionId },
       if (audioRef.current) {
         audioRef.current.currentTime = time;
         audioRef.current.play();
-        setIsPlaying(true);
       }
     },
     getCurrentTime: () => audioRef.current?.currentTime ?? 0,
@@ -33,34 +33,42 @@ const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ sessionId },
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      onTimeUpdate?.(audio.currentTime);
+    };
     const onDurationChange = () => setDuration(audio.duration);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
     const onEnded = () => setIsPlaying(false);
     const onError = () => setError(true);
 
-    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
 
     return () => {
-      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, []);
+  }, [onTimeUpdate]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (isPlaying) {
-      audio.pause();
+    if (audio.paused) {
+      audio.play().catch(() => {});
     } else {
-      audio.play();
+      audio.pause();
     }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying]);
+  }, []);
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;

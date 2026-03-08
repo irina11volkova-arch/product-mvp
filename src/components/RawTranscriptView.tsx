@@ -1,6 +1,7 @@
 'use client';
 
 import { useToast } from './Toast';
+import { isSegmentActive } from '@/lib/utils';
 
 interface RawSegment {
   speaker: number | string;
@@ -46,8 +47,7 @@ export default function RawTranscriptView({ segments, currentTime, onSegmentClic
 
       <div className="space-y-3">
         {segments.map((segment, i) => {
-          const isActive = currentTime !== undefined && segment.start !== undefined && segment.end !== undefined
-            && currentTime >= segment.start && currentTime < segment.end;
+          const isActive = isSegmentActive(currentTime, segment.start, segment.end);
           const canClick = onSegmentClick && segment.start !== undefined;
 
           return (

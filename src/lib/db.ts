@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data.db');
@@ -11,8 +12,10 @@ export function getDb(): Database.Database {
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
     migrate(db);
-    seed(db);
     ensurePrompts(db);
+    // Defer audio cleanup so it doesn't block startup
+    const dbRef = db;
+    setImmediate(() => cleanupOldAudio(dbRef));
   }
   return db;
 }
@@ -42,7 +45,7 @@ function migrate(db: Database.Database) {
     );
   `);
 
-  // Migration: add manager_name and score columns if they don't exist
+  // Migration: add columns if they don't exist
   const columns = db.prepare("PRAGMA table_info(sessions)").all() as { name: string }[];
   const columnNames = columns.map(c => c.name);
   if (!columnNames.includes('manager_name')) {
@@ -57,24 +60,18 @@ function migrate(db: Database.Database) {
   if (!columnNames.includes('audio_path')) {
     db.exec('ALTER TABLE sessions ADD COLUMN audio_path TEXT');
   }
-
-  // Auto-cleanup: delete audio files older than 30 days
-  cleanupOldAudio(db);
 }
 
 function cleanupOldAudio(db: Database.Database) {
-  const fs = require('fs');
   const oldSessions = db.prepare(
     "SELECT id, audio_path FROM sessions WHERE audio_path IS NOT NULL AND created_at < datetime('now', '-30 days')"
   ).all() as { id: string; audio_path: string }[];
 
   for (const session of oldSessions) {
     try {
-      if (fs.existsSync(session.audio_path)) {
-        fs.unlinkSync(session.audio_path);
-      }
-    } catch (e) {
-      console.error(`[Cleanup] Failed to delete audio for session ${session.id}:`, e);
+      fs.unlinkSync(session.audio_path);
+    } catch {
+      // File already gone — that's fine
     }
     db.prepare('UPDATE sessions SET audio_path = NULL WHERE id = ?').run(session.id);
   }
@@ -84,13 +81,9 @@ function cleanupOldAudio(db: Database.Database) {
   }
 }
 
-function seed(db: Database.Database) {
-  const count = db.prepare('SELECT COUNT(*) as c FROM prompts').get() as { c: number };
-  if (count.c > 0) return;
-
-  const prompts = [
+function ensurePrompts(db: Database.Database) {
+  const needed = [
     {
-      id: uuidv4(),
       name: 'Настя — разбор с менеджером по продажам',
       text: `Ты — опытный руководитель отдела продаж. Проанализируй транскрипцию звонка менеджера по продажам.
 
@@ -108,7 +101,6 @@ function seed(db: Database.Database) {
 Дай общий статус результата звонка простым языком (без процентов и цифр).`,
     },
     {
-      id: uuidv4(),
       name: 'Ира — разбор с менеджером по партнёрке',
       text: `Ты — опытный руководитель партнёрской программы. Проанализируй транскрипцию звонка менеджера по партнёрской программе.
 
@@ -125,19 +117,6 @@ function seed(db: Database.Database) {
 Отдельно оцени, был ли установлен раппорт и эмоциональная связь.
 Дай общий статус результата звонка простым языком (без процентов и цифр).`,
     },
-  ];
-
-  const insert = db.prepare(
-    "INSERT INTO prompts (id, name, text, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))"
-  );
-
-  for (const p of prompts) {
-    insert.run(p.id, p.name, p.text);
-  }
-}
-
-function ensurePrompts(db: Database.Database) {
-  const needed = [
     {
       name: 'Настя — разбор с менеджером КЦ',
       text: `Ты — опытный руководитель колл-центра. Проанализируй транскрипцию звонка менеджера колл-центра.

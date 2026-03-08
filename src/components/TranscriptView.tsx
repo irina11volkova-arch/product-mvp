@@ -1,6 +1,7 @@
 'use client';
 
 import { FeedbackResult, TranscriptSegment } from '@/lib/types';
+import { isSegmentActive } from '@/lib/utils';
 
 interface TranscriptViewProps {
   feedback: FeedbackResult;
@@ -31,8 +32,7 @@ export default function TranscriptView({ feedback, currentTime, onSegmentClick }
             <SegmentBlock
               key={i}
               segment={segment}
-              isActive={currentTime !== undefined && segment.start !== undefined && segment.end !== undefined
-                && currentTime >= segment.start && currentTime < segment.end}
+              isActive={isSegmentActive(currentTime, segment.start, segment.end)}
               onClick={onSegmentClick && segment.start !== undefined ? () => onSegmentClick(segment.start!) : undefined}
             />
           ))}

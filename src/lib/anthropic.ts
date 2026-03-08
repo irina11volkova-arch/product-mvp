@@ -10,6 +10,21 @@ interface TranscriptInput {
   end?: number;
 }
 
+function restoreTimestamps<T extends { id?: number }>(
+  items: T[],
+  sources: TranscriptInput[]
+): (T & { start: number; end: number })[] {
+  return items.map((item, i) => {
+    const originalIdx = item.id ?? i;
+    if (originalIdx < 0 || originalIdx >= sources.length) {
+      console.warn(`[restoreTimestamps] id ${item.id} out of range (${sources.length} segments), using fallback`);
+      return { ...item, start: 0, end: 0 };
+    }
+    const original = sources[originalIdx];
+    return { ...item, start: original?.start ?? 0, end: original?.end ?? 0 };
+  });
+}
+
 export async function cleanTranscript(segments: TranscriptInput[]): Promise<TranscriptInput[]> {
   const rawText = segments
     .map((s, i) => `[${i}] Спикер ${s.speaker + 1}: ${s.text}`)
@@ -47,17 +62,7 @@ ${rawText}`,
 
   try {
     const cleaned = JSON.parse(jsonMatch[0]) as (TranscriptInput & { id?: number })[];
-    // Restore timestamps using id to match original segments
-    return cleaned.map((c, i) => {
-      const originalIdx = c.id ?? i;
-      const original = segments[originalIdx];
-      return {
-        speaker: c.speaker,
-        text: c.text,
-        start: original?.start ?? 0,
-        end: original?.end ?? 0,
-      };
-    });
+    return restoreTimestamps(cleaned, segments).map(({ id, ...rest }) => rest);
   } catch {
     return segments;
   }
@@ -113,17 +118,10 @@ ${transcript}`,
 
   const result = JSON.parse(jsonMatch[0]) as FeedbackResult;
 
-  // Restore timestamps using id to match original segments
-  result.segments = result.segments.map((seg, i) => {
-    const segWithId = seg as typeof seg & { id?: number };
-    const originalIdx = segWithId.id ?? i;
-    const original = segments[originalIdx];
-    return {
-      ...seg,
-      start: original?.start ?? 0,
-      end: original?.end ?? 0,
-    };
-  });
+  result.segments = restoreTimestamps(
+    result.segments as (typeof result.segments[number] & { id?: number })[],
+    segments
+  );
 
   return result;
 }

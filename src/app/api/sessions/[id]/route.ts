@@ -26,6 +26,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (body.status === 'error') {
     db.prepare('UPDATE sessions SET status = ?, error_message = ? WHERE id = ?')
       .run('error', body.error_message || 'Остановлено вручную', id);
+  } else {
+    return NextResponse.json({ error: 'Unsupported operation' }, { status: 400 });
   }
 
   const updated = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
