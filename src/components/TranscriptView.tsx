@@ -11,12 +11,22 @@ interface TranscriptViewProps {
 
 interface MergedSegmentGroup {
   speaker: string;
+  displayName: string;
   segments: TranscriptSegment[];
   start?: number;
   end?: number;
 }
 
-function mergeConsecutiveSegments(segments: TranscriptSegment[]): MergedSegmentGroup[] {
+function buildSpeakerMap(feedback: FeedbackResult): Record<string, string> {
+  const managerName = feedback.manager_name || 'Менеджер';
+  const clientName = feedback.client_name || 'Клиент';
+  return {
+    'Спикер 1': `${managerName} (менеджер)`,
+    'Спикер 2': `${clientName} (клиент)`,
+  };
+}
+
+function mergeConsecutiveSegments(segments: TranscriptSegment[], speakerMap: Record<string, string>): MergedSegmentGroup[] {
   const groups: MergedSegmentGroup[] = [];
   for (const seg of segments) {
     const last = groups[groups.length - 1];
@@ -26,6 +36,7 @@ function mergeConsecutiveSegments(segments: TranscriptSegment[]): MergedSegmentG
     } else {
       groups.push({
         speaker: seg.speaker,
+        displayName: speakerMap[seg.speaker] || seg.speaker,
         segments: [seg],
         start: seg.start,
         end: seg.end,
@@ -36,7 +47,8 @@ function mergeConsecutiveSegments(segments: TranscriptSegment[]): MergedSegmentG
 }
 
 export default function TranscriptView({ feedback, currentTime, onSegmentClick }: TranscriptViewProps) {
-  const groups = mergeConsecutiveSegments(feedback.segments);
+  const speakerMap = buildSpeakerMap(feedback);
+  const groups = mergeConsecutiveSegments(feedback.segments, speakerMap);
 
   return (
     <div className="space-y-6">
@@ -55,9 +67,9 @@ export default function TranscriptView({ feedback, currentTime, onSegmentClick }
       {/* Transcript */}
       <div>
         <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Транскрипция</h3>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {groups.map((group, gi) => (
-            <MergedSegmentBlock
+            <SpeakerBlock
               key={gi}
               group={group}
               currentTime={currentTime}
@@ -70,46 +82,53 @@ export default function TranscriptView({ feedback, currentTime, onSegmentClick }
   );
 }
 
-function MergedSegmentBlock({ group, currentTime, onSegmentClick }: {
+function SpeakerBlock({ group, currentTime, onSegmentClick }: {
   group: MergedSegmentGroup;
   currentTime?: number;
   onSegmentClick?: (startTime: number) => void;
 }) {
-  const groupActive = isSegmentActive(currentTime, group.start, group.end);
-  const canClick = onSegmentClick && group.start !== undefined;
-
   return (
-    <div
-      className={`rounded-lg overflow-hidden transition-all ${groupActive ? 'ring-2 ring-zinc-400 ring-offset-1' : ''} ${canClick ? 'cursor-pointer' : ''}`}
-      onClick={canClick ? () => onSegmentClick(group.start!) : undefined}
-    >
-      <div className="px-3 pt-2 pb-1">
-        <span className="text-xs font-mono text-zinc-500">{group.speaker}</span>
+    <div className="rounded-lg bg-zinc-50/50 border border-zinc-100 p-4">
+      <div className="text-xs font-medium text-zinc-500 mb-2">
+        {group.displayName}
       </div>
-      {group.segments.map((segment, i) => {
-        const bgClass = segment.highlight === 'green'
-          ? 'bg-emerald-50 border-l-emerald-500'
-          : segment.highlight === 'red'
-          ? 'bg-red-50 border-l-red-500'
-          : 'bg-white border-l-zinc-200';
+      <div className="text-sm text-zinc-700 leading-relaxed">
+        {group.segments.map((segment, i) => {
+          const active = isSegmentActive(currentTime, segment.start, segment.end);
+          const canClick = onSegmentClick && segment.start !== undefined;
+          const hasHighlight = segment.highlight === 'green' || segment.highlight === 'red';
 
-        return (
-          <div key={i}>
-            <div className={`px-3 py-1.5 border-l-4 ${bgClass}`}>
-              <p className="text-zinc-700 text-sm leading-relaxed">{segment.text}</p>
-            </div>
-            {segment.comment && (
-              <div className={`ml-6 mt-0.5 mb-1 p-3 rounded-lg text-sm ${
-                segment.highlight === 'green'
-                  ? 'bg-emerald-50/50 text-emerald-700'
-                  : 'bg-red-50/50 text-red-700'
-              }`}>
-                {segment.comment}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          const highlightClass = segment.highlight === 'green'
+            ? 'bg-emerald-100 decoration-emerald-400'
+            : segment.highlight === 'red'
+            ? 'bg-red-100 decoration-red-400'
+            : '';
+
+          const activeClass = active ? 'ring-1 ring-zinc-400 ring-offset-1 rounded' : '';
+          const clickClass = canClick ? 'cursor-pointer hover:opacity-80' : '';
+
+          return (
+            <span key={i}>
+              <span
+                className={`${highlightClass} ${activeClass} ${clickClass} ${hasHighlight ? 'rounded px-0.5' : ''} transition-all`}
+                onClick={canClick ? (e) => { e.stopPropagation(); onSegmentClick(segment.start!); } : undefined}
+              >
+                {segment.text}
+              </span>
+              {segment.comment && (
+                <span className={`block ml-2 mt-1 mb-2 p-2 rounded text-xs ${
+                  segment.highlight === 'green'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-red-50 text-red-700'
+                }`}>
+                  {segment.comment}
+                </span>
+              )}
+              {!segment.comment && i < group.segments.length - 1 && ' '}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
