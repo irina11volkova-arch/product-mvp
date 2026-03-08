@@ -11,6 +11,7 @@ export interface Session {
   manager_name: string | null;
   score: number | null;
   mode: PageMode | null;
+  audio_path: string | null;
   created_at: string;
 }
 
@@ -27,6 +28,8 @@ export interface TranscriptSegment {
   text: string;
   highlight: 'green' | 'red' | null;
   comment: string | null;
+  start?: number;
+  end?: number;
 }
 
 export interface FeedbackResult {

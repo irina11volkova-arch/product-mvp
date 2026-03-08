@@ -4,6 +4,8 @@ import { transcribeAudio } from '@/lib/deepgram';
 import { cleanTranscript, generateFeedback } from '@/lib/anthropic';
 import { v4 as uuidv4 } from 'uuid';
 import { Prompt, PageMode } from '@/lib/types';
+import fs from 'fs';
+import path from 'path';
 
 export const maxDuration = 300;
 
@@ -65,8 +67,20 @@ export async function POST(request: NextRequest) {
   }
 }
 
+function saveAudioFile(sessionId: string, file: File, buffer: Buffer): string {
+  const ext = file.name.split('.').pop() || 'webm';
+  const audioDir = path.join(process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : process.cwd(), 'audio');
+  fs.mkdirSync(audioDir, { recursive: true });
+  const audioPath = path.join(audioDir, `${sessionId}.${ext}`);
+  fs.writeFileSync(audioPath, buffer);
+  return audioPath;
+}
+
 async function processTranscriptionOnly(sessionId: string, file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // Save audio file
+  const audioPath = saveAudioFile(sessionId, file, buffer);
 
   // Only Deepgram — no Claude
   const rawSegments = await transcribeAudio(buffer, file.type);
@@ -77,12 +91,15 @@ async function processTranscriptionOnly(sessionId: string, file: File) {
 
   const db = getDb();
   db.prepare(
-    'UPDATE sessions SET status = ?, title = ?, transcript_json = ? WHERE id = ?'
-  ).run('done', smartTitle, JSON.stringify(rawSegments), sessionId);
+    'UPDATE sessions SET status = ?, title = ?, transcript_json = ?, audio_path = ? WHERE id = ?'
+  ).run('done', smartTitle, JSON.stringify(rawSegments), audioPath, sessionId);
 }
 
 async function processAudio(sessionId: string, file: File, promptText: string) {
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // 0. Save audio file
+  const audioPath = saveAudioFile(sessionId, file, buffer);
 
   // 1. Transcribe with Deepgram
   const rawSegments = await transcribeAudio(buffer, file.type);
@@ -104,6 +121,6 @@ async function processAudio(sessionId: string, file: File, promptText: string) {
   const managerName = feedback.manager_name || 'Менеджер';
   const db = getDb();
   db.prepare(
-    'UPDATE sessions SET status = ?, title = ?, transcript_json = ?, feedback_json = ?, manager_name = ?, score = ? WHERE id = ?'
-  ).run('done', smartTitle, JSON.stringify(cleanedSegments), JSON.stringify(feedback), managerName, score, sessionId);
+    'UPDATE sessions SET status = ?, title = ?, transcript_json = ?, feedback_json = ?, manager_name = ?, score = ?, audio_path = ? WHERE id = ?'
+  ).run('done', smartTitle, JSON.stringify(cleanedSegments), JSON.stringify(feedback), managerName, score, audioPath, sessionId);
 }

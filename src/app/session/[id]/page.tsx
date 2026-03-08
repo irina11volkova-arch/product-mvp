@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, useCallback, use } from 'react';
 import Link from 'next/link';
 import TranscriptView from '@/components/TranscriptView';
 import KeyTakeaways from '@/components/KeyTakeaways';
 import RawTranscriptView from '@/components/RawTranscriptView';
+import AudioPlayer, { AudioPlayerRef } from '@/components/AudioPlayer';
 import { Session, FeedbackResult } from '@/lib/types';
 import { scoreColor } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
@@ -13,6 +14,8 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const { id } = use(params);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const playerRef = useRef<AudioPlayerRef>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,6 +36,21 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     }, 3000);
     return () => clearInterval(interval);
   }, [id]);
+
+  // Poll current time from audio player for active segment highlighting
+  useEffect(() => {
+    if (!session?.audio_path) return;
+    const timer = setInterval(() => {
+      if (playerRef.current) {
+        setCurrentTime(playerRef.current.getCurrentTime());
+      }
+    }, 200);
+    return () => clearInterval(timer);
+  }, [session?.audio_path]);
+
+  const handleSegmentClick = useCallback((startTime: number) => {
+    playerRef.current?.seekTo(startTime);
+  }, []);
 
   const handleFeedbackDislike = async () => {
     await navigator.clipboard.writeText(window.location.href);
@@ -67,9 +85,14 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     : null;
 
   const isTranscriptionOnly = session.mode === 'transcription';
+  const hasAudio = !!session.audio_path;
 
   return (
     <main className="min-h-screen">
+      {hasAudio && session.status === 'done' && (
+        <AudioPlayer ref={playerRef} sessionId={id} />
+      )}
+
       <div className="max-w-3xl mx-auto px-6 py-12">
         <header className="mb-8 animate-fade-in">
           <div className="flex items-start justify-between gap-4">
@@ -112,14 +135,22 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
         {session.status === 'done' && isTranscriptionOnly && rawSegments && (
           <div className="animate-fade-in">
-            <RawTranscriptView segments={rawSegments} />
+            <RawTranscriptView
+              segments={rawSegments}
+              currentTime={hasAudio ? currentTime : undefined}
+              onSegmentClick={hasAudio ? handleSegmentClick : undefined}
+            />
           </div>
         )}
 
         {session.status === 'done' && !isTranscriptionOnly && feedback && (
           <div className="animate-fade-in space-y-6">
             <KeyTakeaways feedback={feedback} />
-            <TranscriptView feedback={feedback} />
+            <TranscriptView
+              feedback={feedback}
+              currentTime={hasAudio ? currentTime : undefined}
+              onSegmentClick={hasAudio ? handleSegmentClick : undefined}
+            />
 
             <div className="mt-10 pt-6 border-t border-zinc-200 flex justify-center">
               <button

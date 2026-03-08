@@ -3,6 +3,8 @@ import { createClient } from '@deepgram/sdk';
 interface DiarizedSegment {
   speaker: number;
   text: string;
+  start: number;
+  end: number;
 }
 
 export async function transcribeAudio(audioBuffer: Buffer, mimeType: string): Promise<DiarizedSegment[]> {
@@ -43,6 +45,8 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string): Pr
             segments.push({
               speaker: para.speaker ?? 0,
               text: sentence.text,
+              start: sentence.start ?? 0,
+              end: sentence.end ?? 0,
             });
           }
         }
@@ -50,7 +54,7 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string): Pr
       }
 
       // Last resort: return full transcript as single segment
-      return [{ speaker: 0, text: transcript }];
+      return [{ speaker: 0, text: transcript, start: 0, end: 0 }];
     }
 
     throw new Error('Транскрипция не удалась — нет результатов');
@@ -59,5 +63,7 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string): Pr
   return utterances.map((u) => ({
     speaker: u.speaker ?? 0,
     text: u.transcript,
+    start: u.start ?? 0,
+    end: u.end ?? 0,
   }));
 }

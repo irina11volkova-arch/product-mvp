@@ -5,13 +5,17 @@ import { useToast } from './Toast';
 interface RawSegment {
   speaker: number | string;
   text: string;
+  start?: number;
+  end?: number;
 }
 
 interface RawTranscriptViewProps {
   segments: RawSegment[];
+  currentTime?: number;
+  onSegmentClick?: (startTime: number) => void;
 }
 
-export default function RawTranscriptView({ segments }: RawTranscriptViewProps) {
+export default function RawTranscriptView({ segments, currentTime, onSegmentClick }: RawTranscriptViewProps) {
   const { toast } = useToast();
 
   const handleCopy = () => {
@@ -41,16 +45,28 @@ export default function RawTranscriptView({ segments }: RawTranscriptViewProps) 
       </div>
 
       <div className="space-y-3">
-        {segments.map((segment, i) => (
-          <div key={i} className="p-4 rounded-xl bg-zinc-50 border border-zinc-100">
-            <div className="text-xs font-medium text-zinc-400 mb-1.5">
-              Спикер {segment.speaker}
+        {segments.map((segment, i) => {
+          const isActive = currentTime !== undefined && segment.start !== undefined && segment.end !== undefined
+            && currentTime >= segment.start && currentTime < segment.end;
+          const canClick = onSegmentClick && segment.start !== undefined;
+
+          return (
+            <div
+              key={i}
+              className={`p-4 rounded-xl bg-zinc-50 border border-zinc-100 transition-all
+                ${isActive ? 'ring-2 ring-zinc-400 ring-offset-1' : ''}
+                ${canClick ? 'cursor-pointer hover:bg-zinc-100' : ''}`}
+              onClick={canClick ? () => onSegmentClick(segment.start!) : undefined}
+            >
+              <div className="text-xs font-medium text-zinc-400 mb-1.5">
+                Спикер {segment.speaker}
+              </div>
+              <p className="text-zinc-700 text-sm leading-relaxed">
+                {segment.text}
+              </p>
             </div>
-            <p className="text-zinc-700 text-sm leading-relaxed">
-              {segment.text}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

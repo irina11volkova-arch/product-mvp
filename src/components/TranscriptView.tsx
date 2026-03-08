@@ -4,9 +4,11 @@ import { FeedbackResult, TranscriptSegment } from '@/lib/types';
 
 interface TranscriptViewProps {
   feedback: FeedbackResult;
+  currentTime?: number;
+  onSegmentClick?: (startTime: number) => void;
 }
 
-export default function TranscriptView({ feedback }: TranscriptViewProps) {
+export default function TranscriptView({ feedback, currentTime, onSegmentClick }: TranscriptViewProps) {
   return (
     <div className="space-y-6">
       {/* Overall status */}
@@ -26,7 +28,13 @@ export default function TranscriptView({ feedback }: TranscriptViewProps) {
         <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Транскрипция</h3>
         <div className="space-y-0.5">
           {feedback.segments.map((segment, i) => (
-            <SegmentBlock key={i} segment={segment} />
+            <SegmentBlock
+              key={i}
+              segment={segment}
+              isActive={currentTime !== undefined && segment.start !== undefined && segment.end !== undefined
+                && currentTime >= segment.start && currentTime < segment.end}
+              onClick={onSegmentClick && segment.start !== undefined ? () => onSegmentClick(segment.start!) : undefined}
+            />
           ))}
         </div>
       </div>
@@ -34,16 +42,22 @@ export default function TranscriptView({ feedback }: TranscriptViewProps) {
   );
 }
 
-function SegmentBlock({ segment }: { segment: TranscriptSegment }) {
+function SegmentBlock({ segment, isActive, onClick }: { segment: TranscriptSegment; isActive?: boolean; onClick?: () => void }) {
   const bgClass = segment.highlight === 'green'
     ? 'bg-emerald-50 border-l-emerald-500'
     : segment.highlight === 'red'
     ? 'bg-red-50 border-l-red-500'
     : 'bg-white border-l-zinc-200';
 
+  const activeClass = isActive ? 'ring-2 ring-zinc-400 ring-offset-1' : '';
+  const clickClass = onClick ? 'cursor-pointer hover:opacity-80' : '';
+
   return (
     <div>
-      <div className={`p-3 rounded-lg border-l-4 ${bgClass}`}>
+      <div
+        className={`p-3 rounded-lg border-l-4 ${bgClass} ${activeClass} ${clickClass} transition-all`}
+        onClick={onClick}
+      >
         <div className="flex items-start gap-3">
           <span className="text-xs font-mono text-zinc-500 pt-0.5 shrink-0 min-w-[70px]">
             {segment.speaker}

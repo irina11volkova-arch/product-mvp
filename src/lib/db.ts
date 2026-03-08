@@ -53,6 +53,34 @@ function migrate(db: Database.Database) {
   if (!columnNames.includes('mode')) {
     db.exec('ALTER TABLE sessions ADD COLUMN mode TEXT');
   }
+  if (!columnNames.includes('audio_path')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN audio_path TEXT');
+  }
+
+  // Auto-cleanup: delete audio files older than 30 days
+  cleanupOldAudio(db);
+}
+
+function cleanupOldAudio(db: Database.Database) {
+  const fs = require('fs');
+  const oldSessions = db.prepare(
+    "SELECT id, audio_path FROM sessions WHERE audio_path IS NOT NULL AND created_at < datetime('now', '-30 days')"
+  ).all() as { id: string; audio_path: string }[];
+
+  for (const session of oldSessions) {
+    try {
+      if (fs.existsSync(session.audio_path)) {
+        fs.unlinkSync(session.audio_path);
+      }
+    } catch (e) {
+      console.error(`[Cleanup] Failed to delete audio for session ${session.id}:`, e);
+    }
+    db.prepare('UPDATE sessions SET audio_path = NULL WHERE id = ?').run(session.id);
+  }
+
+  if (oldSessions.length > 0) {
+    console.log(`[Cleanup] Removed ${oldSessions.length} audio files older than 30 days`);
+  }
 }
 
 function seed(db: Database.Database) {
