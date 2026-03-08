@@ -10,6 +10,32 @@ interface RawSegment {
   end?: number;
 }
 
+interface MergedRawGroup {
+  speaker: number | string;
+  texts: string[];
+  start?: number;
+  end?: number;
+}
+
+function mergeConsecutiveRaw(segments: RawSegment[]): MergedRawGroup[] {
+  const groups: MergedRawGroup[] = [];
+  for (const seg of segments) {
+    const last = groups[groups.length - 1];
+    if (last && last.speaker === seg.speaker) {
+      last.texts.push(seg.text);
+      last.end = seg.end;
+    } else {
+      groups.push({
+        speaker: seg.speaker,
+        texts: [seg.text],
+        start: seg.start,
+        end: seg.end,
+      });
+    }
+  }
+  return groups;
+}
+
 interface RawTranscriptViewProps {
   segments: RawSegment[];
   currentTime?: number;
@@ -18,6 +44,7 @@ interface RawTranscriptViewProps {
 
 export default function RawTranscriptView({ segments, currentTime, onSegmentClick }: RawTranscriptViewProps) {
   const { toast } = useToast();
+  const groups = mergeConsecutiveRaw(segments);
 
   const handleCopy = () => {
     const text = segments
@@ -46,9 +73,9 @@ export default function RawTranscriptView({ segments, currentTime, onSegmentClic
       </div>
 
       <div className="space-y-3">
-        {segments.map((segment, i) => {
-          const isActive = isSegmentActive(currentTime, segment.start, segment.end);
-          const canClick = onSegmentClick && segment.start !== undefined;
+        {groups.map((group, i) => {
+          const isActive = isSegmentActive(currentTime, group.start, group.end);
+          const canClick = onSegmentClick && group.start !== undefined;
 
           return (
             <div
@@ -56,13 +83,13 @@ export default function RawTranscriptView({ segments, currentTime, onSegmentClic
               className={`p-4 rounded-xl bg-zinc-50 border border-zinc-100 transition-all
                 ${isActive ? 'ring-2 ring-zinc-400 ring-offset-1' : ''}
                 ${canClick ? 'cursor-pointer hover:bg-zinc-100' : ''}`}
-              onClick={canClick ? () => onSegmentClick(segment.start!) : undefined}
+              onClick={canClick ? () => onSegmentClick(group.start!) : undefined}
             >
               <div className="text-xs font-medium text-zinc-400 mb-1.5">
-                Спикер {segment.speaker}
+                Спикер {group.speaker}
               </div>
-              <p className="text-zinc-700 text-sm leading-relaxed">
-                {segment.text}
+              <p className="text-zinc-700 text-sm leading-relaxed whitespace-pre-line">
+                {group.texts.join('\n')}
               </p>
             </div>
           );
