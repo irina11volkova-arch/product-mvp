@@ -10,6 +10,20 @@ interface TranscriptInput {
   end?: number;
 }
 
+/** Helper: call Claude with streaming (required for large max_tokens) and return final text */
+async function callClaude(prompt: string, maxTokens: number): Promise<string> {
+  const stream = client.messages.stream({
+    model: 'claude-sonnet-4-6',
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const response = await stream.finalMessage();
+  if (response.stop_reason === 'max_tokens') {
+    console.warn('[callClaude] Response truncated — max_tokens reached');
+  }
+  return response.content[0].type === 'text' ? response.content[0].text : '';
+}
+
 function restoreTimestamps<T extends { id?: number }>(
   items: T[],
   sources: TranscriptInput[]
@@ -30,13 +44,7 @@ export async function cleanTranscript(segments: TranscriptInput[]): Promise<Tran
     .map((s, i) => `[${i}] Спикер ${s.speaker + 1}: ${s.text}`)
     .join('\n');
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 32000,
-    messages: [
-      {
-        role: 'user',
-        content: `Ты — редактор. Очисти эту транскрипцию устной речи, переведя её в письменный формат:
+  const text = await callClaude(`Ты — редактор. Очисти эту транскрипцию устной речи, переведя её в письменный формат:
 - Убери слова-паразиты (ну, типа, как бы, вот, э-э, м-м)
 - Убери незаконченные фразы и повторы
 - Исправь ошибки распознавания
@@ -51,12 +59,8 @@ export async function cleanTranscript(segments: TranscriptInput[]): Promise<Tran
 Нумерация спикеров начинается с 0.
 
 Транскрипция:
-${rawText}`,
-      },
-    ],
-  });
+${rawText}`, 32000);
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) return segments;
 
@@ -76,7 +80,7 @@ export async function generateFeedback(
     .map((s, i) => `[${i}] Спикер ${s.speaker + 1}: ${s.text}`)
     .join('\n');
 
-  const systemPrompt = `${promptText}
+  const text = await callClaude(`${promptText}
 
 ПРАВИЛА ОПРЕДЕЛЕНИЯ ИМЁН:
 Спикер 1 — это всегда менеджер. Спикер 2 — клиент.
@@ -107,19 +111,8 @@ export async function generateFeedback(
 ВАЖНО: каждая реплика в транскрипции имеет номер [id]. Ты ОБЯЗАН вернуть этот id в каждом элементе segments. Не пропускай реплики — каждая должна быть в ответе. Для реплик без замечаний highlight и comment = null. Для реплик без замечаний НЕ ПИШИ comment — это экономит токены.
 
 Транскрипция:
-${transcript}`;
+${transcript}`, 32000);
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 32000,
-    messages: [{ role: 'user', content: systemPrompt }],
-  });
-
-  if (response.stop_reason === 'max_tokens') {
-    console.warn('[generateFeedback] Response truncated — max_tokens reached');
-  }
-
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('Не удалось получить AI-фидбек');
@@ -169,13 +162,7 @@ export async function generateEmployeeReport(
 Сильные моменты:\n${greenSegments || '- нет'}`;
   }).join('\n\n---\n\n');
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
-    messages: [
-      {
-        role: 'user',
-        content: `Ты — опытный руководитель отдела продаж. Проанализируй ${feedbacks.length} звонков менеджера "${managerName}" и составь подробный отчёт.
+  const text = await callClaude(`Ты — опытный руководитель отдела продаж. Проанализируй ${feedbacks.length} звонков менеджера "${managerName}" и составь подробный отчёт.
 
 Найди повторяющиеся паттерны — как ошибки, так и сильные стороны. Дай конкретные рекомендации по дообучению.
 
@@ -209,12 +196,8 @@ export async function generateEmployeeReport(
 
 Данные по звонкам:
 
-${summaries}`,
-      },
-    ],
-  });
+${summaries}`, 8192);
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('Не удалось сгенерировать отчёт');
