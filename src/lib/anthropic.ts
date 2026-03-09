@@ -32,7 +32,7 @@ export async function cleanTranscript(segments: TranscriptInput[]): Promise<Tran
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
+    max_tokens: 32000,
     messages: [
       {
         role: 'user',
@@ -76,13 +76,7 @@ export async function generateFeedback(
     .map((s, i) => `[${i}] Спикер ${s.speaker + 1}: ${s.text}`)
     .join('\n');
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 8192,
-    messages: [
-      {
-        role: 'user',
-        content: `${promptText}
+  const systemPrompt = `${promptText}
 
 ПРАВИЛА ОПРЕДЕЛЕНИЯ ИМЁН:
 Спикер 1 — это всегда менеджер. Спикер 2 — клиент.
@@ -110,13 +104,20 @@ export async function generateFeedback(
   ]
 }
 
-ВАЖНО: каждая реплика в транскрипции имеет номер [id]. Ты ОБЯЗАН вернуть этот id в каждом элементе segments. Не пропускай реплики — каждая должна быть в ответе. Для реплик без замечаний highlight и comment = null.
+ВАЖНО: каждая реплика в транскрипции имеет номер [id]. Ты ОБЯЗАН вернуть этот id в каждом элементе segments. Не пропускай реплики — каждая должна быть в ответе. Для реплик без замечаний highlight и comment = null. Для реплик без замечаний НЕ ПИШИ comment — это экономит токены.
 
 Транскрипция:
-${transcript}`,
-      },
-    ],
+${transcript}`;
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 32000,
+    messages: [{ role: 'user', content: systemPrompt }],
   });
+
+  if (response.stop_reason === 'max_tokens') {
+    console.warn('[generateFeedback] Response truncated — max_tokens reached');
+  }
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -124,7 +125,20 @@ ${transcript}`,
     throw new Error('Не удалось получить AI-фидбек');
   }
 
-  const result = JSON.parse(jsonMatch[0]) as FeedbackResult;
+  let result: FeedbackResult;
+  try {
+    result = JSON.parse(jsonMatch[0]) as FeedbackResult;
+  } catch {
+    // JSON truncated — try to repair by closing the array and object
+    const truncated = jsonMatch[0];
+    const repaired = truncated.replace(/,?\s*$/, '') + ']}';
+    try {
+      result = JSON.parse(repaired) as FeedbackResult;
+      console.warn('[generateFeedback] Repaired truncated JSON');
+    } catch {
+      throw new Error('Не удалось распарсить AI-фидбек (обрезанный JSON)');
+    }
+  }
 
   result.segments = restoreTimestamps(
     result.segments as (typeof result.segments[number] & { id?: number })[],
